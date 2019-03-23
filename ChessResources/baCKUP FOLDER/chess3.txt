@@ -1,0 +1,201 @@
+'''
+This is a chess game..
+
+'''
+
+import pygame , sys , os , chess
+from pygame.locals import *
+
+FPS = 30                                # frames per second, the general speed of the program
+
+BOXSIZE = 65                             #Specify the box-size of each square
+MARGIN  = 80                             #ALL THE SIDE MAGRINS AROUND THE CHESSBOARD
+EXTRAWIDTH = 300                         #EXTRAWIDTH TO BE DISPLAYED ON THE RIGHT HAND SIDE
+
+TOTAL_SIZE = BOXSIZE * 8 + 2*MARGIN      #Calculate the total size of the screen required
+
+fontsize = 15                            #Font for printing the chess co-ordiantes
+
+
+#            R    G    B
+GRAY     = (100, 100, 100)
+NAVYBLUE = ( 60,  60, 100)
+WHITE    = (255, 255, 255)
+RED      = (255,   0,   0)
+GREEN    = (  0, 255,   0)
+BLUE     = (  0,   0, 255)
+BLACK    = (  0,   0,   0)
+YELLOW   = (255, 255,   0)
+ORANGE   = (255, 128,   0)
+PURPLE   = (255,   0, 255)
+CYAN     = (  0, 255, 255)
+
+BGCOLOR = BLUE
+
+
+board =chess.Board()
+#chess.WHITE = True
+#chess.BLACK = False
+
+
+mousex , mousey = 0 ,0
+
+
+listOfFiles  = ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h')
+listOfRanks  = ('1','2','3','4','5','6','7','8')
+listOfPieces = ('King','Knight','Pawn','Rook','Queen')
+listOfColors = ('Black','White')
+
+
+def main():
+    global DISPLAYSURF ,FPSCLOCK ,mousex ,mousey
+    pygame.init()
+
+    DISPLAYSURF = pygame.display.set_mode((TOTAL_SIZE+EXTRAWIDTH, TOTAL_SIZE))
+    FPSCLOCK = pygame.time.Clock()
+    pygame.display.set_caption('CHESS CO-ORDINATES GAME')
+
+
+    while True:                                 # Main loop
+
+        drawboard()
+        drawCoordinates()
+        showMouseCoordinates(mousex, mousey)
+        showBoxCoordinates(mousex,mousey)
+
+        for event in pygame.event.get():                           #Event Handling loop
+
+            if event.type == QUIT or (event.type == KEYUP and event.key == K_ESCAPE):
+                pygame.quit()
+                sys.exit()
+            if event.type == MOUSEMOTION:
+                mousex, mousey = event.pos
+
+        pygame.display.update()
+        FPSCLOCK.tick(FPS)
+
+
+
+
+def drawCoordinates():
+
+    #Functions which will draw the co-ordiates to the screen from current  perspective
+    fontObj = pygame.font.Font('freesansbold.ttf', fontsize)
+
+    # For printing out ranks.. 1,2,3.
+    X = int(MARGIN / 2) + int(MARGIN/3)
+
+    for i in range(8):
+
+        index = i
+        if board.turn:
+            index = 8 - i - 1
+
+        textSurfaceObj = fontObj.render(listOfRanks[index], True, YELLOW)
+        textRectObj = textSurfaceObj.get_rect()
+        Y = (i) * BOXSIZE + MARGIN + int(BOXSIZE / 2)
+        textRectObj.center = (X, Y)
+        DISPLAYSURF.blit(textSurfaceObj, textRectObj)
+
+    # For printing out filenames
+    Y = TOTAL_SIZE - int(MARGIN / 2)-int(MARGIN/3)
+    for i in range(8):
+        index=i
+        if not board.turn:
+            index = 8 - i - 1
+        textSurfaceObj = fontObj.render(listOfFiles[index], True, YELLOW)
+        textRectObj = textSurfaceObj.get_rect()
+        X = i * BOXSIZE + MARGIN + int(BOXSIZE / 2)
+        textRectObj.center = (X, Y)
+        DISPLAYSURF.blit(textSurfaceObj, textRectObj)
+
+
+
+
+def drawboard():
+
+    #Draws out the entire board to the window depending upon what is the current turn(board.turn)
+    DISPLAYSURF.fill(BGCOLOR)          #BACKGROUND COLOR
+    if(board.turn):                       #White to move
+        color = BLACK
+    else:                                 #Black to move
+        color = WHITE
+
+    for row in range(8):
+        X = MARGIN + row * BOXSIZE
+        for column in range(8):
+            if color == BLACK:
+                color = WHITE
+            else:
+                color = BLACK
+
+            Y = MARGIN + column * BOXSIZE
+            boardSqrObj = pygame.Rect(X, Y, BOXSIZE, BOXSIZE)     # (X,Y) is the topleft corner of the board do be drawn
+            pygame.draw.rect(DISPLAYSURF, color, boardSqrObj)
+
+        if color == BLACK:
+            color = WHITE
+        else:
+            color = BLACK
+
+
+def showMouseCoordinates(x,y):
+    #Displays the mouse co-ordinates onto the screen.
+    fontObj = pygame.font.Font('freesansbold.ttf',20)
+    textSurfaceObj = fontObj.render('MouseC:'+str(x)+' , '+str(y) , True ,YELLOW)
+
+    textRectObj = textSurfaceObj.get_rect()
+    textRectObj.center = (720,50)
+    DISPLAYSURF.blit(textSurfaceObj,textRectObj)
+
+
+
+
+
+
+
+
+
+# boxIndices() , leftTopCoordinates() , showBoxCoordinates() work in tandem!!
+def boxIndices(x,y):
+    #Convert Mouse co-ordinates to chesssquare indices Ex: a1->(0,0)
+    if board.turn:
+        xindex = int((x - MARGIN) / BOXSIZE)
+        yindex = 7 - int((y - MARGIN) / BOXSIZE)
+    else:
+        xindex = 7 - int((x - MARGIN) / BOXSIZE)
+        yindex = int((y - MARGIN) / BOXSIZE)
+    return (xindex, yindex)
+
+def leftTopCoordinates(x,y):
+    #Returns None,None if mouse is not in chessboard else returns array index of the board co-ordinates
+    if x > MARGIN and x < (MARGIN+8*BOXSIZE):
+        if(y>MARGIN and y< (MARGIN+8*BOXSIZE)):
+            return boxIndices(x,y)
+    return None , None
+
+def showBoxCoordinates(x,y):
+    #Displays and returns
+    xindex , yindex = leftTopCoordinates(x,y)
+    if xindex!=None and yindex!=None :
+
+        currentSqrNumber=chess.square(xindex,yindex)
+        nameOfSqr=chess.SQUARE_NAMES[currentSqrNumber]
+        indexText = '('+str(xindex)+' '+str(yindex)+')'
+
+        text1='ChessSquare:' + str(currentSqrNumber) + '  ' +  nameOfSqr+'  '+indexText
+        fontObj2 = pygame.font.Font('freesansbold.ttf', 20)
+        textSurfaceObj2 = fontObj2.render(text1, True, YELLOW)
+        textRectObj2 = textSurfaceObj2.get_rect()
+        textRectObj2.center = (740, 190)
+        DISPLAYSURF.blit(textSurfaceObj2, textRectObj2)
+
+#End of related Functions
+
+
+
+
+
+
+if __name__ == '__main__':         #Eventually transfers the execution to the main() funciton..
+    main()
