@@ -1,0 +1,325 @@
+'''
+This is a chess game..
+'''
+
+import pygame , sys , os , chess
+from pygame.locals import *
+
+os.chdir('E:\\Mrunank\\Sem4\\Python books\\ChessResources')
+
+# TODO: Make a tkinter application for promotion case and the first page
+# TODO: Check if it is a draw,a victory or anything as such has occured and display the result
+# TODO: Allow the user to enter their player name in the beginning of the game and display them on board
+# TODO: Copy current board fen to the user's clipboard after every move
+# TODO: Provide help option
+# TODO: Provide colors option on the main menu
+# TODO: Make undo option
+# TODO: Provide a PGN for the game in .txt file
+
+
+FPS = 50                                # frames per second, the general speed of the program
+
+BOXSIZE = 65                             #Specify the box-size of each square
+MARGIN  = 80                             #ALL THE SIDE MAGRINS AROUND THE CHESSBOARD
+EXTRAWIDTH = 300                         #EXTRAWIDTH TO BE DISPLAYED ON THE RIGHT HAND SIDE
+
+TOTAL_SIZE = BOXSIZE * 8 + 2*MARGIN      #Calculate the total size of the screen required
+
+fontsize = 15                            #Font for printing the chess co-ordiantes on the side of board
+
+mousex , mousey = 0 ,0                   #keeps current x and y co-ordinates of mouse
+#            R    G    B
+GRAY     = (100, 100, 100)
+NAVYBLUE = ( 60,  60, 100)
+WHITE    = (255, 255, 255)
+RED      = (255,   0,   0)
+GREEN    = (  0, 255,   0)
+BLUE     = (  0,   0, 255)
+DARKPURPLE=(51 , 51 ,  77)
+BLACK    = (  0,   0,   0)
+YELLOW   = (255, 255,   0)
+ORANGE   = (255, 128,   0)
+PURPLE   = (255,   0, 255)
+CYAN     = (  0, 255, 255)
+DARKGREEN= (45 , 134, 45 )
+
+BGCOLOR = DARKPURPLE
+
+board =chess.Board()                  #Create and initialize the virtual board
+#chess.WHITE = True
+#chess.BLACK = False
+
+
+
+currentBoard = []              #Saves the current position of the board
+
+firstClickedSquareName, destinationSquareName = None, None
+firstSquareNo , destinationSquareNo = None, None
+isMouseClicked = False                #Has the mouse been clicked?
+xIndex, yIndex = -1, -1               #Saves the x-y indices of the first selected piece on the board
+xdest ,ydest =-1 ,-1                  #Saves the x-y indices of the destination square of the selected piece on
+promoteTo=None                        #Saves the promoted piece type
+wasMoveMade = False
+
+listOfFiles  = ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h')
+listOfRanks  = ('1','2','3','4','5','6','7','8')
+listOfPieces = ('King','Knight','Pawn','Rook','Queen')
+listOfColors = ('Black','White')
+
+dictofPieces={'r':'BlackRook'   ,    'R':'WhiteRook',
+              'p':'BlackPawn'   ,    'P':'WhitePawn',
+              'n':'BlackKnight' ,    'N':'WhiteKnight',
+              'b':'BlackBishop' ,    'B':'WhiteBishop',
+              'k':'BlackKing'   ,    'K':'WhiteKing',
+              'q':'BlackQueen'  ,    'Q':'WhiteQueen'
+              }
+
+
+def main():
+    global DISPLAYSURF ,FPSCLOCK ,mousex ,mousey ,isMouseClicked ,xIndex ,yIndex ,firstClickedSquareName
+    global firstClickedSquareName,destinationSquareName,promoteTo ,wasMoveMade
+    pygame.init()
+
+    DISPLAYSURF = pygame.display.set_mode((TOTAL_SIZE+EXTRAWIDTH, TOTAL_SIZE))
+    FPSCLOCK = pygame.time.Clock()
+    pygame.display.set_caption('CHESS CO-ORDINATES GAME')
+
+    pygame.mixer.music.load("BackSound1.mp3")
+    pygame.mixer.music.play(-1,0.0)
+
+    pieceSound = pygame.mixer.Sound("pieceSound.wav")
+
+    while True:                                 # Main loop
+        if wasMoveMade:
+            pieceSound.play()
+            wasMoveMade = False
+            pygame.time.wait(150)
+
+
+        updatecurrentboard()
+        drawboard()
+        drawpieces()
+
+
+
+        drawCoordinates()
+        drawwhosemove()
+
+        showMouseCoordinates(mousex, mousey)   # To be removed later on
+
+        if isMouseOnSquare(mousex, mousey) :      #Just for displaying board square coordinates
+            showBoxCoordinates(mousex,mousey)
+
+        for event in pygame.event.get():                           #Event Handling loop
+
+            if event.type == QUIT or (event.type == KEYUP and event.key == K_ESCAPE):
+                pygame.quit()
+                sys.exit()
+
+            if event.type == MOUSEMOTION:
+                mousex, mousey = event.pos
+
+            if event.type == MOUSEBUTTONUP:
+                mousex , mousey = event.pos
+                isMouseClicked=False
+
+                #If a piece was selected and a destination square was chosen
+                if firstClickedSquareName !=None and isMouseOnSquare(mousex,mousey):
+                    xdest,ydest,destinationSquareNo,destinationSquareName =getBoxInfo(mousex,mousey)
+
+                    #Handling promotion case!!!
+                    if board.turn and currentBoard[7 - yIndex][xIndex] == 'P' and ydest == 7:
+                        promoteTo = chess.QUEEN     # TODO: Add promotion case
+                    elif board.turn and currentBoard[7 - yIndex][xIndex] == 'p' and ydest == 0:
+                        promoteTo = chess.QUEEN
+
+                    #Generate the Move here
+                    move = chess.Move(firstSquareNo, destinationSquareNo,promotion=promoteTo)
+
+                    #Check if the move is legal
+                    if move in board.legal_moves:
+                        #pieceSound.play()
+                        wasMoveMade = True
+                        board.push_san(board.san(move) )          #Make the move
+
+
+
+                xIndex, yIndex, firstSquareNo, firstClickedSquareName = -1, -1, None, None
+                promoteTo=None
+
+            if event.type == MOUSEBUTTONDOWN:
+                mousex , mousey = event.pos
+                isMouseClicked=True
+                if isMouseOnSquare(mousex,mousey) and firstClickedSquareName==None:
+                    xIndex,yIndex,firstSquareNo,firstClickedSquareName = getBoxInfo(mousex,mousey)
+
+
+        pygame.display.update()
+        FPSCLOCK.tick(FPS)
+
+
+
+def drawCoordinates():
+    #Functions which will draw the co-ordiates to the screen from current  perspective
+    fontObj = pygame.font.Font('freesansbold.ttf', fontsize)
+
+    # For printing out ranks.. 1,2,3.
+    X = int(MARGIN / 2) + int(MARGIN/3)
+
+    for i in range(8):
+        index = i
+        if board.turn:
+            index = 8 - i - 1
+
+        textSurfaceObj = fontObj.render(listOfRanks[index], True, YELLOW)
+        textRectObj = textSurfaceObj.get_rect()
+        Y = (i) * BOXSIZE + MARGIN + int(BOXSIZE / 2)
+        textRectObj.center = (X, Y)
+        DISPLAYSURF.blit(textSurfaceObj, textRectObj)
+
+    # For printing out filenames
+    Y = TOTAL_SIZE - int(MARGIN / 2)-int(MARGIN/3)
+    for i in range(8):
+        index=i
+        if not board.turn:
+            index = 8 - i - 1
+        textSurfaceObj = fontObj.render(listOfFiles[index], True, YELLOW)
+        textRectObj = textSurfaceObj.get_rect()
+        X = i * BOXSIZE + MARGIN + int(BOXSIZE / 2)
+        textRectObj.center = (X, Y)
+        DISPLAYSURF.blit(textSurfaceObj, textRectObj)
+
+def drawboard():
+
+    #Draws out the entire board to the window depending upon what is the current turn(board.turn)
+    DISPLAYSURF.fill(BGCOLOR)          #BACKGROUND COLOR
+    color = DARKGREEN
+
+
+    for row in range(8):
+        X = MARGIN + row * BOXSIZE
+        for column in range(8):
+            if color == DARKGREEN:
+                color = WHITE
+            else:
+                color = DARKGREEN
+
+            Y = MARGIN + column * BOXSIZE
+            boardSqrObj = pygame.Rect(X, Y, BOXSIZE, BOXSIZE)     # (X,Y) is the topleft corner of the board do be drawn
+            pygame.draw.rect(DISPLAYSURF, color, boardSqrObj)
+        if color == DARKGREEN:
+            color = WHITE
+        else:
+            color = DARKGREEN
+
+
+def showMouseCoordinates(x,y):
+    #Displays the mouse co-ordinates onto the screen.
+    fontObj = pygame.font.Font('freesansbold.ttf',20)
+    textSurfaceObj = fontObj.render('MouseC:'+str(x)+' , '+str(y) , True ,YELLOW)
+
+    textRectObj = textSurfaceObj.get_rect()
+    textRectObj.center = (720,50)
+    DISPLAYSURF.blit(textSurfaceObj,textRectObj)
+
+
+
+# boxIndices() , leftTopCoordinates() , showBoxCoordinates() work in tandom!!
+def boxIndices(x,y):
+    #Convert Mouse co-ordinates to chesssquare indices depending on the players' turn
+    if board.turn:                                     #White to move
+        xindex = int((x - MARGIN) / BOXSIZE)
+        yindex = 7 - int((y - MARGIN) / BOXSIZE)
+    else:                                               #Black to move
+        xindex = 7 - int((x - MARGIN) / BOXSIZE)
+        yindex = int((y - MARGIN) / BOXSIZE)
+    return xindex, yindex
+
+def isMouseOnSquare(x,y):
+    #Returns False if mouse is not present in chessboard else returns True
+    if x > MARGIN and x < (MARGIN+8*BOXSIZE):
+        if(y>MARGIN and y< (MARGIN+8*BOXSIZE)):
+            return True
+    return False
+
+def showBoxCoordinates(x,y):
+    #Displays the chesss Square co-ordinates
+        xindex , yindex = boxIndices(x,y)
+
+        currentSqrNumber=chess.square(xindex,yindex)
+        nameOfSqr=chess.SQUARE_NAMES[currentSqrNumber]
+        indexText = '('+str(xindex)+' '+str(yindex)+')'
+
+        text1='ChessSquare:' + str(currentSqrNumber) + '  ' +  nameOfSqr+'  '+indexText
+        fontObj2 = pygame.font.Font('freesansbold.ttf', 20)
+        textSurfaceObj2 = fontObj2.render(text1, True, YELLOW)
+        textRectObj2 = textSurfaceObj2.get_rect()
+        textRectObj2.center = (740, 150)
+        DISPLAYSURF.blit(textSurfaceObj2, textRectObj2)
+
+def getBoxInfo(x,y):
+    #returns BoardIndices , currentSquareNo and nameOfSqr
+    xindex, yindex = boxIndices(x, y)
+    currentSqrNumber = chess.square(xindex, yindex)
+    nameOfSqr = chess.SQUARE_NAMES[currentSqrNumber]
+    return xindex,yindex,currentSqrNumber,nameOfSqr
+
+
+
+def updatecurrentboard():
+    #Updates the current state of the currentBoard list
+    global currentBoard
+    listOfBoard = list(str(board).split('\n'))
+    for i in range(len(listOfBoard)):
+        listOfBoard[i] = listOfBoard[i].split(' ')
+    currentBoard = listOfBoard
+
+def drawpieces():
+    #Draws the pieces in the currentBoard list to the board
+    global DISPLAYSURF
+    selectedpiecei,selectedpiecek=None,None
+    for i in range(8):
+        for k in range(8):
+            if ( (7-i)!=yIndex or k!=xIndex)and currentBoard[i][k] != '.':
+                if board.turn:
+                    x = k*BOXSIZE + MARGIN
+                    y = i *BOXSIZE+MARGIN
+                else:
+                    x = (7-k) * BOXSIZE + MARGIN
+                    y = (7-i) * BOXSIZE + MARGIN
+
+                imgname = dictofPieces[currentBoard[i][k]] + '.png'
+                imgSurfObj = pygame.image.load(imgname)
+
+                DISPLAYSURF.blit(imgSurfObj, (x, y))
+
+
+            elif (currentBoard[i][k] != '.') : #Drawing the selected piece near the mouse pointer
+                selectedpiecei=i
+                selectedpiecek=k
+                continue
+
+    if selectedpiecei!=None :
+        imgx = int(mousex - 30)
+        imgy = int(mousey - 30)
+        imgname1 = dictofPieces[currentBoard[selectedpiecei][selectedpiecek]] + '.png'
+        imgSurfObj = pygame.image.load(imgname1)
+        DISPLAYSURF.blit(imgSurfObj, (imgx, imgy))
+
+
+
+def drawwhosemove():
+    #Displays whose move it is at the top
+    if board.turn:
+        text = 'White'  #White to move
+    else:
+        text = 'Black'
+    text = text + ' to move'
+    fontObj = pygame.font.Font('freesansbold.ttf', 20)
+    textSurfaceObj = fontObj.render(text, True, YELLOW)
+    textRectObj = textSurfaceObj.get_rect()
+    textRectObj.center = (340,30)
+    DISPLAYSURF.blit(textSurfaceObj, textRectObj)
+
+if __name__ == '__main__':         #Eventually transfers the execution to the main() funciton..
+    main()
